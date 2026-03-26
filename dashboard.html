@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FMCG AI — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="/static/css/style.css"/>
+<style>
+  /* ── Forecast v2 additions ─────────────────────────────────────── */
+
+  /* AI badge that appears above the form */
+  .ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, rgba(0,212,170,.12), rgba(124,58,237,.12));
+    border: 1px solid rgba(0,212,170,.25);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .ai-dot {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Auto-feature transparency panel */
+  .auto-features-panel {
+    background: rgba(0,212,170,.03);
+    border: 1px solid rgba(0,212,170,.1);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-top: 20px;
+    display: none;
+  }
+  .auto-features-panel.show { display: block; }
+  .af-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .af-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+  }
+  .af-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .af-label { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; margin-bottom: 4px; }
+  .af-value { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600; color: var(--accent); }
+  .af-source {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .source-csv      { background: rgba(34,197,94,.1);   color: #86efac; }
+  .source-synthetic{ background: rgba(245,158,11,.1);  color: #fcd34d; }
+
+  /* Forecast result card — larger highlight for the main number */
+  .fc-main-card {
+    background: linear-gradient(135deg, rgba(0,212,170,.08), rgba(124,58,237,.06));
+    border: 1px solid rgba(0,212,170,.3);
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+    grid-column: span 2;
+  }
+  .fc-main-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .fc-main-value { font-size: 52px; font-weight: 800; font-family: 'DM Mono', monospace; color: var(--accent); line-height: 1; letter-spacing: -2px; }
+  .fc-main-unit  { font-size: 14px; color: var(--muted); margin-top: 6px; }
+  .fc-meta       { font-size: 12px; color: var(--muted); margin-top: 10px; font-family: 'DM Mono', monospace; }
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══════════════════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">📦</div>
+    <div class="logo-text">FMCG<span>AI</span></div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#" class="nav-item active" data-section="overview">
+      <span class="nav-icon">⬡</span> Overview
+    </a>
+    <a href="#" class="nav-item" data-section="forecast">
+      <span class="nav-icon">📈</span> Demand Forecast
+    </a>
+    <a href="#" class="nav-item" data-section="inventory">
+      <span class="nav-icon">🏭</span> Inventory
+    </a>
+    <a href="#" class="nav-item" data-section="supply">
+      <span class="nav-icon">🚚</span> Supply Chain
+    </a>
+    <a href="#" class="nav-item" data-section="anomaly">
+      <span class="nav-icon">⚠</span> Risk & Anomalies
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-pill">
+      <span class="user-avatar">👤</span>
+      <div>
+        <div class="user-name" id="sidebarUser">—</div>
+        <div class="user-role" id="sidebarRole">—</div>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="logout()">Sign Out</button>
+  </div>
+</aside>
+
+<!-- ═══ MAIN ══════════════════════════════════════════════════════════════ -->
+<main class="main">
+  <header class="topbar">
+    <div>
+      <div class="topbar-title" id="pageTitle">Overview</div>
+      <div class="topbar-sub" id="lastUpdated">Loading data…</div>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge"><span class="live-dot"></span>Live</div>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════
+       OVERVIEW SECTION
+  ══════════════════════════════════════════ -->
+  <section id="sec-overview" class="section active">
+    <div class="kpi-grid">
+      <div class="kpi-card" id="kpiAccuracy">
+        <div class="kpi-label">Model Accuracy</div>
+        <div class="kpi-value accent">—</div>
+        <div class="kpi-sub">R² Score</div>
+      </div>
+      <div class="kpi-card" id="kpiMAE">
+        <div class="kpi-label">Mean Abs. Error</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-sub">Units</div>
+      </div>
+      <div class="kpi-card" id="kpiRMSE">
+        <div class="kpi-label">RMSE</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-sub">Units</div>
+      </div>
+      <div class="kpi-card" id="kpiRisk">
+        <div class="kpi-label">Risk Score</div>
+        <div class="kpi-value warn">—</div>
+        <div class="kpi-sub">Demand anomalies</div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <div class="chart-card wide">
+        <div class="chart-header">
+          <div class="chart-title">Actual vs Predicted Demand</div>
+          <select id="productSelect" onchange="loadHistory()">
+            <option value="Product_A">Product A — Beverages</option>
+            <option value="Product_B">Product B — Snacks</option>
+            <option value="Product_C">Product C — Dairy</option>
+            <option value="Product_D">Product D — Personal Care</option>
+          </select>
+        </div>
+        <canvas id="forecastChart" height="110"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><div class="chart-title">Anomaly Radar</div></div>
+        <canvas id="anomalyChart" height="180"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       FORECAST SECTION  (v2 — AI Automated)
+  ══════════════════════════════════════════ -->
+  <section id="sec-forecast" class="section">
+
+    <div class="form-card">
+      <!-- AI automation badge -->
+      <div class="ai-badge">
+        <span class="ai-dot"></span>
+        AI Automated — No manual inputs required
+      </div>
+
+      <div class="form-title">Demand Forecast</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6;">
+        Select a product and target month. The AI engine automatically retrieves
+        historical demand data, computes lag features and rolling averages, and
+        runs the Random Forest model — zero manual input needed.
+      </p>
+
+      <!--
+        ╔══════════════════════════════════════════════════════════════╗
+        ║  ONLY TWO INPUTS — product + month                          ║
+        ║  lag_1, lag_2, lag_3, price, promotion_flag are all AUTO    ║
+        ╚══════════════════════════════════════════════════════════════╝
+      -->
+      <div class="form-grid" style="grid-template-columns: 1fr 1fr; max-width: 480px;">
+        <div class="form-field">
+          <label>Product</label>
+          <select id="fc_product">
+            <option value="Product_A">Product A — Beverages</option>
+            <option value="Product_B">Product B — Snacks</option>
+            <option value="Product_C">Product C — Dairy</option>
+            <option value="Product_D">Product D — Personal Care</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Forecast Month</label>
+          <select id="fc_month">
+            <option value="1">January</option>
+            <option value="2">February</option>
+            <option value="3">March</option>
+            <option value="4">April</option>
+            <option value="5">May</option>
+            <option value="6" selected>June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="fcBtn" onclick="runForecast()">
+        ▶ Generate AI Forecast
+      </button>
+    </div>
+
+    <!-- ── Forecast results ────────────────────────────────────────── -->
+    <div id="fcResults" style="display:none; margin-top: 0;">
+
+      <!-- Main forecast number — full-width highlight card -->
+      <div class="fc-main-card" style="margin-bottom:16px;">
+        <div class="fc-main-label">Forecasted Demand</div>
+        <div class="fc-main-value" id="fcVal">—</div>
+        <div class="fc-main-unit">units predicted</div>
+        <div class="fc-meta" id="fcMeta">—</div>
+      </div>
+
+      <!-- Supporting KPIs -->
+      <div class="result-grid">
+        <div class="result-card">
+          <div class="result-label">Confidence Score</div>
+          <div class="result-value accent" id="fcConf">—</div>
+          <div class="result-sub">%</div>
+        </div>
+        <div class="result-card">
+          <div class="result-label">Model Accuracy</div>
+          <div class="result-value" id="fcAcc">—</div>
+          <div class="result-sub">% R²</div>
+        </div>
+        <div class="result-card">
+          <div class="result-label">MAE</div>
+          <div class="result-value" id="fcMAE">—</div>
+          <div class="result-sub">units</div>
+        </div>
+        <div class="result-card">
+          <div class="result-label">RMSE</div>
+          <div class="result-value" id="fcRMSE">—</div>
+          <div class="result-sub">units</div>
+        </div>
+      </div>
+
+      <!-- Confidence chart -->
+      <div class="chart-card" style="margin-top:16px;">
+        <div class="chart-header">
+          <div class="chart-title">Prediction Confidence</div>
+          <span id="fcSourceBadge" class="af-source"></span>
+        </div>
+        <canvas id="fcGaugeChart" height="80"></canvas>
+      </div>
+
+      <!-- Auto-feature transparency panel (shown for viva / demo) -->
+      <div class="auto-features-panel" id="afPanel">
+        <div class="af-title">
+          🤖 Auto-Generated Features
+          <span style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">
+            — computed by the AI engine, not entered manually
+          </span>
+        </div>
+        <div class="af-grid" id="afGrid"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       INVENTORY SECTION
+  ══════════════════════════════════════════ -->
+  <section id="sec-inventory" class="section">
+    <div class="form-card">
+      <div class="form-title">Inventory Optimization</div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Product</label>
+          <select id="inv_product">
+            <option>Product_A</option><option>Product_B</option>
+            <option>Product_C</option><option>Product_D</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Current Stock (units)</label>
+          <input type="number" id="inv_stock" value="500"/>
+        </div>
+        <div class="form-field">
+          <label>Forecasted Demand (weekly)</label>
+          <input type="number" id="inv_demand" value="200"/>
+        </div>
+        <div class="form-field">
+          <label>Lead Time (days)</label>
+          <input type="number" id="inv_lead" value="7"/>
+        </div>
+        <div class="form-field">
+          <label>Ordering Cost (₹)</label>
+          <input type="number" id="inv_order_cost" value="500"/>
+        </div>
+        <div class="form-field">
+          <label>Holding Cost / unit (₹)</label>
+          <input type="number" id="inv_hold" value="2"/>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="runInventory()">⚙ Optimize Inventory</button>
+    </div>
+
+    <div id="invResults" style="display:none">
+      <div class="alert-banner" id="invAlert"></div>
+      <div class="result-grid">
+        <div class="result-card"><div class="result-label">Current Stock</div><div class="result-value" id="invStock">—</div><div class="result-sub">units</div></div>
+        <div class="result-card highlight"><div class="result-label">Reorder Point</div><div class="result-value accent" id="invROP">—</div><div class="result-sub">units</div></div>
+        <div class="result-card highlight"><div class="result-label">Order Qty (EOQ)</div><div class="result-value accent" id="invEOQ">—</div><div class="result-sub">units</div></div>
+        <div class="result-card"><div class="result-label">Safety Stock</div><div class="result-value" id="invSS">—</div><div class="result-sub">units</div></div>
+        <div class="result-card"><div class="result-label">Days of Stock</div><div class="result-value" id="invDays">—</div><div class="result-sub">days</div></div>
+      </div>
+      <div class="chart-card" style="margin-top:24px">
+        <div class="chart-title">Stock Level vs Thresholds</div>
+        <canvas id="invChart" height="110"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       SUPPLY CHAIN SECTION
+  ══════════════════════════════════════════ -->
+  <section id="sec-supply" class="section">
+    <div class="form-card" style="margin-bottom:24px">
+      <div class="form-title">Dispatch Optimization — Warehouse → Retailers</div>
+      <button class="btn-primary" onclick="loadSupply()">🚚 Run Dispatch Optimizer</button>
+    </div>
+    <div id="supplyResults" style="display:none">
+      <div class="kpi-grid" style="margin-bottom:24px">
+        <div class="kpi-card"><div class="kpi-label">Warehouse Stock</div><div class="kpi-value" id="scWarehouse">—</div><div class="kpi-sub">units</div></div>
+        <div class="kpi-card"><div class="kpi-label">Total Dispatched</div><div class="kpi-value accent" id="scDispatched">—</div><div class="kpi-sub">units</div></div>
+        <div class="kpi-card"><div class="kpi-label">Efficiency</div><div class="kpi-value" id="scEfficiency">—</div><div class="kpi-sub">%</div></div>
+        <div class="kpi-card"><div class="kpi-label">Nodes Fulfilled</div><div class="kpi-value" id="scFulfilled">—</div><div class="kpi-sub">of total</div></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Dispatch Plan by Retailer</div>
+        <div id="dispatchTable"></div>
+        <canvas id="supplyChart" height="110" style="margin-top:20px"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       ANOMALY SECTION
+  ══════════════════════════════════════════ -->
+  <section id="sec-anomaly" class="section">
+    <button class="btn-primary" onclick="loadAnomalies()" style="margin-bottom:24px">🔍 Scan for Anomalies</button>
+    <div id="anomalyResults" style="display:none">
+      <div class="kpi-grid" style="margin-bottom:24px">
+        <div class="kpi-card"><div class="kpi-label">Risk Level</div><div class="kpi-value warn" id="riskLevel">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">Risk Score</div><div class="kpi-value" id="riskScore">—</div><div class="kpi-sub">/ 100</div></div>
+        <div class="kpi-card"><div class="kpi-label">Anomalies Found</div><div class="kpi-value" id="riskCount">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">Mean Demand</div><div class="kpi-value" id="riskMean">—</div><div class="kpi-sub">units</div></div>
+      </div>
+      <div class="chart-card" style="margin-bottom:24px">
+        <div class="chart-title">Demand Series — Anomalies Highlighted</div>
+        <canvas id="anomalyTimeline" height="130"></canvas>
+      </div>
+      <div class="alerts-list" id="alertsList"></div>
+    </div>
+  </section>
+
+</main>
+
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>
